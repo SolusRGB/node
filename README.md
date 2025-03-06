@@ -1,7 +1,7 @@
 # Running a node
 
 ## Machine Specs
-Recommended minimum hardware: 4 CPU cores, 32 gb RAM, 200 gb disk.
+Recommended minimum hardware: 4 CPU cores, 32 GB RAM, 200 GB disk.
 
 Currently only Ubuntu 24.04 is supported.
 
@@ -9,193 +9,342 @@ Ports 4001 and 4002 are used for gossip and must be open to the public. Otherwis
 
 For lowest latency, run the node in Tokyo, Japan.
 
+---
+
 ## Setup
-Configure chain to testnet when testing.
-```
+
+### Configure Chain
+
+For **testnet**:
+```bash
 echo '{"chain": "Testnet"}' > ~/visor.json
 ```
 
-Download the visor binary, which will spawn and manage the child node process:
+For **mainnet**:
+```bash
+echo '{"chain": "Mainnet"}' > ~/visor.json
 ```
+
+### Download the Visor Binary
+
+For **testnet**:
+```bash
 curl https://binaries.hyperliquid-testnet.xyz/Testnet/hl-visor > ~/hl-visor && chmod a+x ~/hl-visor
 ```
 
-## Verify signed binaries
-Binaries are signed for extra security. The public key is found at `pub_key.asc` in this repo.
-Import this key:
+For **mainnet**:
+```bash
+curl https://binaries.hyperliquid-mainnet.xyz/Mainnet/hl-visor > ~/hl-visor && chmod a+x ~/hl-visor
 ```
+
+---
+
+## Verify Signed Binaries
+
+Binaries are signed for extra security. The public key is found at `pub_key.asc` in this repo. Import this key:
+```bash
 gpg --import pub_key.asc
 ```
 
-Verify any (signature, binary) pair manually. Signatures for are located at `{binary}.asc`:
-```
+Verify any (signature, binary) pair manually. Signatures are located at `{binary}.asc`.
+
+For example, download and verify the testnet binary:
+```bash
 curl https://binaries.hyperliquid-testnet.xyz/Testnet/hl-visor.asc > hl-visor.asc
 gpg --verify hl-visor.asc hl-visor
 ```
 
-`hl-visor` will also verify `hl-node` automatically and will not upgrade on verification failure. Important: the public key must be imported as above or the visor will not work.
-
-Optionally, sign this key using `gpg --sign-key` to avoid warnings when verifying its signatures.
-
-## Running non-validator
-Run `~/hl-visor run-non-validator`. It may take a while as the node navigates the network to find an appropriate peer to stream from. Logs like `applied block X` mean the node should be streaming live data.
-
-## Reading L1 data
-The node process will write data to `~/hl/data`. With default settings, the network will generate around 20 gb of logs per day, so it is also recommended to archive or delete old files.
-
-Blocks parsed as transactions will be streamed to `~/hl/data/replica_cmds/{start_time}/{date}/{height}`.
-
-State snapshots will be saved every 10000 blocks to `~/hl/data/periodic_abci_states/{date}/{height}.rmp`
-
-The state can be translated to JSON format for examination:
-
-```
-./hl-node --chain Testnet translate-abci-state ~/hl/data/periodic_abci_states/{date}/{height}.rmp /tmp/out.json
+For mainnet, use the corresponding URL:
+```bash
+curl https://binaries.hyperliquid-mainnet.xyz/Mainnet/hl-visor.asc > hl-visor.asc
+gpg --verify hl-visor.asc hl-visor
 ```
 
-### Flags
-Certain flags can be turned on when running validators or non-validators:
-- `--write-trades` will stream trades to `~/hl/data/node_trades/hourly/{date}/{hour}`.
-- `--write-order-statuses` will write every L1 order status to `~/hl/data/node_order_statuses/hourly/{date}/{hour}`. Orders can be a substantial amount of data.
-- `--replica-cmds-style` configures what is written down to `~/hl/data/replica_cmds/{start_time}/{date}/{height}`. Possible values are `actions` for only actions (default), `actions-and-responses` for actions and responses, and `recent-actions` which is the same as `actions` but only preserving the two latest height files.
-- `--serve-eth-rpc` enables the EVM rpc. More details in the following section.
+> **Note:** `hl-visor` will automatically verify `hl-node` and will not upgrade on verification failure. The public key must be imported (or signed with `gpg --sign-key`) to avoid warnings.
+
+---
+
+## Running Non-Validator
+
+Run the visor with:
+```bash
+~/hl-visor run-non-validator
+```
+It may take a while as the node navigates the network to find an appropriate peer to stream from. Logs like `applied block X` mean the node should be streaming live data.
+
+> **Tip:** Ensure that your chain configuration (in `~/visor.json`) is set appropriately for testnet or mainnet.
+
+---
+
+## Reading L1 Data
+
+The node process writes data to `~/hl/data`. With default settings, the network generates around 20 GB of logs per day; therefore, it is recommended to archive or delete old files.
+
+- **Transaction Blocks:**  
+  Blocks parsed as transactions are streamed to:
+  ```
+  ~/hl/data/replica_cmds/{start_time}/{date}/{height}
+  ```
+
+- **State Snapshots:**  
+  State snapshots are saved every 10,000 blocks to:
+  ```
+  ~/hl/data/periodic_abci_states/{date}/{height}.rmp
+  ```
+  
+  The state can be translated to JSON for examination:
+  ```bash
+  ./hl-node --chain Testnet translate-abci-state ~/hl/data/periodic_abci_states/{date}/{height}.rmp /tmp/out.json
+  ```
+  For mainnet, substitute `Testnet` with `Mainnet`:
+  ```bash
+  ./hl-node --chain Mainnet translate-abci-state ~/hl/data/periodic_abci_states/{date}/{height}.rmp /tmp/out.json
+  ```
+
+---
+
+## Flags
+
+When running nodes (validator or non-validator), you can enable several flags:
+
+- `--write-trades`: Streams trades to `~/hl/data/node_trades/hourly/{date}/{hour}`.
+- `--write-order-statuses`: Writes every L1 order status to `~/hl/data/node_order_statuses/hourly/{date}/{hour}`.
+- `--replica-cmds-style`: Configures what is written down to `~/hl/data/replica_cmds/{start_time}/{date}/{height}`. Possible values:
+  - `actions` (default)
+  - `actions-and-responses`
+  - `recent-actions` (preserves only the two latest height files)
+- `--serve-eth-rpc`: Enables the EVM RPC. See the following section.
 
 For example, to run a non-validator with all flags enabled:
-```
+```bash
 ~/hl-visor run-non-validator --write-trades --write-order-statuses --serve-eth-rpc
 ```
 
+> **Note:** These flags work regardless of the chain; simply ensure your configuration (`~/visor.json`) and command-line flags use the correct chain (Testnet or Mainnet).
+
+---
+
 ## EVM
-EVM RPC can be enabled by passing the `--serve-eth-rpc` flag `~/hl-visor run-non-validator --serve-eth-rpc`. Once running, requests can be sent as follows: `curl -X POST --header 'Content-Type: application/json' --data '{"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["latest",false],"id":1}' http://localhost:3001/evm`
+
+Enable the EVM RPC by passing the `--serve-eth-rpc` flag:
+```bash
+~/hl-visor run-non-validator --serve-eth-rpc
+```
+
+Once running, you can send requests (the same for both testnet and mainnet):
+```bash
+curl -X POST --header 'Content-Type: application/json' --data '{"jsonrpc":"2.0","method":"eth_getBlockByNumber","params":["latest",false],"id":1}' http://localhost:3001/evm
+```
+
+---
 
 ## Delegation
-The native token on testnet is HYPE with token address `0x7317beb7cceed72ef0b346074cc8e7ab`.
 
-Delegations occur from the staking balance, which is separate from the spot balance. The token can be transferred from the spot balance into the staking balance by running
+For **testnet**, the native token is **HYPE** with token address:
 ```
+0x7317beb7cceed72ef0b346074cc8e7ab
+```
+
+For **mainnet**, replace the token address with the appropriate mainnet address (if different) and use the same delegation commands.
+
+Delegations occur from the staking balance (separate from the spot balance). To move tokens into the staking balance:
+```bash
 ./hl-node --chain Testnet --key <delegator-wallet-key> staking-deposit <wei>
 ```
-
-The token can be delegated by running
+For mainnet, replace `Testnet` with `Mainnet`:
+```bash
+./hl-node --chain Mainnet --key <delegator-wallet-key> staking-deposit <wei>
 ```
+
+Delegate tokens by running:
+```bash
 ./hl-node --chain Testnet --key <delegator-wallet-key> delegate <validator-address> <amount-in-wei>
 ```
-Optionally `--undelegate` can be passed to undelegate from the validator.
-
-Delegations can be seen by running
+For mainnet:
+```bash
+./hl-node --chain Mainnet --key <delegator-wallet-key> delegate <validator-address> <amount-in-wei>
 ```
+
+To undelegate, add the `--undelegate` flag:
+```bash
+./hl-node --chain Testnet --key <delegator-wallet-key> delegate <validator-address> <amount-in-wei> --undelegate
+```
+For mainnet, again use `--chain Mainnet`.
+
+To view delegations:
+```bash
 curl -X POST --header "Content-Type: application/json" --data '{ "type": "delegations", "user": <delegator-address>}' https://api.hyperliquid-testnet.xyz/info
 ```
+For mainnet, use the corresponding API endpoint (if provided).
 
-Staking withdrawals are subject to a 5 minute unbonding queue to allow for slashing in the case of malicious behavior. Rewards are sent to the unwithdrawn balance at the end of each epoch. Information about pending withdrawals and rewards can be seen by running
-```
-curl -X POST --header "Content-Type: application/json" --data '{ "type": "delegatorSummary", "user": <delegator-address>}' https://api.hyperliquid-testnet.xyz/info
-```
-
-To initiate a staking withdrawal:
-```
+Staking withdrawals (subject to a 5-minute unbonding period) are initiated with:
+```bash
 ./hl-node --chain Testnet --key <delegator-wallet-key> staking-withdrawal <wei>
 ```
-The withdrawal will be reflected in the exchange balance automatically once the unbonding period ends.
+And similarly for mainnet:
+```bash
+./hl-node --chain Mainnet --key <delegator-wallet-key> staking-withdrawal <wei>
+```
 
-## Running a validating node
+---
+
+## Running a Validating Node
+
 The non-validating node setup above is a prerequisite for running a validating node.
 
-### Generate config
+### Generate Config
 
-Generate two wallets: a validator wallet and a signer wallet (use cryptographically secure keys, e.g. the output of `openssl rand -hex 32`). The validator wallet is "cold" in the sense that it holds funds and receives delegation rewards. The signer wallet is "hot" in the sense that it is used only for signing consensus messages. They can be the same wallet for simplicity.
-```
+Generate two wallets: a **validator wallet** and a **signer wallet** (use cryptographically secure keys, e.g. via `openssl rand -hex 32`). The validator wallet is "cold" (stores funds and receives delegation rewards) while the signer wallet is "hot" (used only for signing consensus messages). For simplicity, these can be the same wallet.
+
+Configure the signer wallet:
+```bash
 echo '{"key": "<signer-key>"}' > ~/hl/hyperliquid_data/node_config.json
 ```
-In the commands below, `<signer-key>` is the same hex string in the config file above and `<validator-key>` is analogous (do not lose either key).
+Keep both `<signer-key>` and `<validator-key>` safe.
 
-### Ensure validator user exists
-Both the signer address and the validator address should have non-zero perps USDC balance, or they will not be able to send the signed actions to register as a validator or otherwise operate properly.
-These command print the addresses:
-```
+### Ensure Validator User Exists
+
+Both the signer address and the validator address must have a non-zero perps USDC balance to participate in consensus. Print the addresses using:
+```bash
 ~/hl-node --chain Testnet --key <signer-key> print-address
 ~/hl-node --chain Testnet --key <validator-key> print-address
 ```
+For mainnet, replace `Testnet` with `Mainnet` in these commands.
 
-### Join network
-The validator set on testnet is entirely permissionless.
+### Join Network
 
-Register public IP and signer address of validator, along with display name and description. On testnet, self-delegate 10_000 (1000000000000 wei) to run the validator.
+For **testnet**, the validator set is entirely permissionless.
 
-```
+Register your public IP and signer address along with your display name and description. On testnet, you must self-delegate 10,000 (i.e. 1000000000000 wei) to run the validator:
+```bash
 ~/hl-node --chain Testnet --key <validator-key> send-signed-action '{"type": "CValidatorAction", "register": {"profile": {"node_ip": {"Ip": "1.2.3.4"}, "signer": "<signer-address>", "name": "...", "description": "..." }, "initial_wei": 1000000000000}}'
 ```
 
-Make sure ports 4000-4010 are open to other validators (currently only ports 4001-4006 are used, but additional ports in the range 4000-4010 may be used in the future). Either open the ports to the public, or keep a firewall allowing the validators which are found in `c_staking` in the state snapshots. Note that the validator set and IPs are dynamic.
-
-### Run the validator
-Run the validator using the visor binary to pick up updates `curl https://binaries.hyperliquid-testnet.xyz/Testnet/hl-visor > hl-visor && ./hl-visor run-validator`
-
-To debug an issue, it is often easier to run `./hl-node --chain Testnet run-validator` to immediately see stderr and disable restarts.
-
-The validator bootstraps the state with a non-validator first. To use a known reliable peer for faster bootstrapping:
+For **mainnet**, use:
+```bash
+~/hl-node --chain Mainnet --key <validator-key> send-signed-action '{"type": "CValidatorAction", "register": {"profile": {"node_ip": {"Ip": "1.2.3.4"}, "signer": "<signer-address>", "name": "...", "description": "..." }, "initial_wei": 1000000000000}}'
 ```
+
+Make sure ports 4000-4010 are open to other validators (currently only ports 4001-4006 are used, though additional ports in the range may be used in the future). Either open the ports publicly or configure your firewall to allow traffic from validators (found in `c_staking` in the state snapshots).
+
+### Run the Validator
+
+For **testnet**, run the validator using the visor binary to pick up updates:
+```bash
+curl https://binaries.hyperliquid-testnet.xyz/Testnet/hl-visor > hl-visor && ./hl-visor run-validator
+```
+
+For **mainnet**, run:
+```bash
+curl https://binaries.hyperliquid-mainnet.xyz/Mainnet/hl-visor > hl-visor && ./hl-visor run-validator
+```
+
+> **Debugging Tip:** To troubleshoot, it is sometimes easier to run:
+> ```bash
+> ./hl-node --chain Testnet run-validator
+> ```
+> or for mainnet:
+> ```bash
+> ./hl-node --chain Mainnet run-validator
+> ```
+> This command shows stderr directly and disables automatic restarts.
+
+When bootstrapping, the validator starts with a non-validator process. To speed this up, you can specify a known reliable peer:
+```bash
 echo '{ "root_node_ips": [{"Ip": "1.2.3.4"}], "try_new_peers": false, "chain": "Testnet" }' > ~/override_gossip_config.json
 ```
-
-### Begin validating
-For now, registering and changing IP address automatically jails the validator so that it does not participate in consensus initially. When the expected outputs are streaming to `~/hl/data/node_logs/consensus/hourly/{date}/{hour}`, send the following action to begin participating in consensus:
+For mainnet, change the chain to `"Mainnet"`:
+```bash
+echo '{ "root_node_ips": [{"Ip": "1.2.3.4"}], "try_new_peers": false, "chain": "Mainnet" }' > ~/override_gossip_config.json
 ```
+
+### Begin Validating
+
+Initially, registering or changing the IP automatically jails the validator. When you see the expected outputs streaming to `~/hl/data/node_logs/consensus/hourly/{date}/{hour}`, send the following action to begin participating in consensus:
+
+For **testnet**:
+```bash
 ~/hl-node --chain Testnet --key <signer-key> send-signed-action '{"type": "CSignerAction", "unjailSelf": null}'
 ```
 
-To exit consensus, run the following command to "self jail" and wait for the validator to leave the active set before shutting down.
+For **mainnet**:
+```bash
+~/hl-node --chain Mainnet --key <signer-key> send-signed-action '{"type": "CSignerAction", "unjailSelf": null}'
 ```
+
+To exit consensus, "self jail" by running:
+
+For **testnet**:
+```bash
 ~/hl-node --chain Testnet --key <signer-key> send-signed-action '{"type": "CSignerAction", "jailSelf": null}'
 ```
 
+For **mainnet**:
+```bash
+~/hl-node --chain Mainnet --key <signer-key> send-signed-action '{"type": "CSignerAction", "jailSelf": null}'
+```
+
 ### Jailing
-Performance and uptime are critical for the mainnet L1. To achieve this, a key feature of HyperBFT consensus is "jailing." When a validator is jailed, it can still participate in the consensus network by forwarding messages to peers, but does not vote on or propose blocks. To avoid jailing, it is recommended to achieve 200ms two-way latency to at least 1/3 of validators by stake.
 
-Once a validator is jailed, it can only be unjailed through the `unjailSelf` action described above. This action will only succeed if the L1 time is later than the "jailed until" time of the validator. Self-jailing does not advance the "jailed until" duration, and is therefore the only way to disable a validator without penalty.
+Validators that fall behind in performance or connectivity are automatically jailed. Once jailed, a validator can only be unjailed through the `unjailSelf` action (once the L1 time passes the "jailed until" time). Self-jailing does not extend the duration of jailing.
 
-To debug a validator that repeatedly gets jailed, first check stdout for signs of crashing or other unusual logs. If the binary is running without problems, logs in `~/hl/data/node_logs/status/` may be helpful to debug latencies to other validators or other connectivity issues.
+For debugging jailing issues, check stdout and logs in `~/hl/data/node_logs/status/` for connectivity or latency problems.
 
 ### Alerting
-It is recommended for validators to set up an alerting system to maintain optimal uptime.
 
-To configure Slack to alert on critical messages:
-```
+Validators are encouraged to set up alerting to maintain optimal uptime. For example, to configure Slack alerts on testnet:
+```bash
 echo '{"testnet_slack_channel": "C000...", "slack_key": "Bearer xoxb-..."}' > ~/hl/api_secrets.json
 ```
-
-Test the Slack alert configuration:
-```
+And test it with:
+```bash
 ~/hl-node --chain Testnet send-slack-alert "hello hyperliquid"
 ```
 
-Alternative alerting systems can be configured by filtering to the lines in stdout at level `CRIT`.
+For **mainnet**, you might use a similar configuration, possibly with a key or channel specific to mainnet.
+
+---
 
 ## Logs
-`node_logs/consensus` will contain most messages sent and received by the consensus algorithm, and is often helpful for debugging.
 
-For example, to check whether Vote messages were sent to validator `0x5ac9...` around `2024-12-10T09:25`, run `grep destination...0x5ac9  ~/hl/data/node_logs/consensus/hourly/20241210/9  | grep T09:25 | grep Vote`.
-
-Validators with issues will timeout on rounds when they do not propose a block. Search for `suspect` in the consensus logs to see the timeouts and their likely cause. Often jailing will be correlated with many timeouts by the jailed node.
-
-## Validator endpoints
-See information about the current validators:
+The directory `node_logs/consensus` contains messages sent and received by the consensus algorithm—useful for debugging. For example, to check whether Vote messages were sent to validator `0x5ac9...` around `2024-12-10T09:25`:
+```bash
+grep destination...0x5ac9 ~/hl/data/node_logs/consensus/hourly/20241210/9 | grep T09:25 | grep Vote
 ```
+
+If a validator experiences timeouts or jailing, search for `suspect` in the consensus logs for more information.
+
+Crash logs from the child process are located at:
+```
+~/hl/data/visor_child_stderr/{date}/{node_binary_index}
+```
+
+---
+
+## Validator Endpoints
+
+Check the current validator summaries with:
+```bash
 curl -X POST --header "Content-Type: application/json" --data '{ "type": "validatorSummaries"}' https://api.hyperliquid-testnet.xyz/info
 ```
+For **mainnet**, use the corresponding mainnet endpoint (if provided).
 
-Change validator profile if already registered:
-```
+To change your validator profile (for example, updating the IP address):
+```bash
 ~/hl-node --chain Testnet --key <validator-key> send-signed-action '{"type": "CValidatorAction", "changeProfile": {"node_ip": {"Ip": "1.2.3.4"}, "name": "..."}}'
 ```
+For mainnet, replace `Testnet` with `Mainnet`.
 
-Other validator profile options:
-- `disable_delegations`: Disables delegations when this is set to true.
-- `commission_bps`: Amount of the staking rewards the validator takes before the remainder is distributed proportionally to stake delegated. Defaults to 10000 (all rewards go to the validator) and is not allowed to increase.
-- `signer`: Allows the validator to set a hot address for signing consensus messages.
+Other profile options include:
+- `disable_delegations`: Set to true to disable delegations.
+- `commission_bps`: Specifies the percentage of staking rewards the validator takes (default is 10000, meaning all rewards go to the validator, and this cannot be increased).
+- `signer`: Allows setting a hot address for signing consensus messages.
 
-## Mainnet non-validator seed peers
-The community runs several independent root peers for non-validators to connect to. This set will grow over time, and validators may share their own reliable root peers in other channels. To run a non-validator on mainnet, add at least one of these IP addresses to `~/override_gossip_config.json`:
+---
+
+## Mainnet Non-Validator Seed Peers
+
+For running a non-validator on **mainnet**, add at least one of these IP addresses to `~/override_gossip_config.json`:
 ```
 operator_name,root_ips
 ASXN,20.188.6.225
@@ -207,5 +356,13 @@ Nansen,91.134.41.52
 Hypurrscan,57.180.50.253
 ```
 
+---
+
 ### Troubleshooting
-Crash logs from the child process will be written to `~/hl/data/visor_child_stderr/{date}/{node_binary_index}`
+
+Crash logs from the child process are written to:
+```
+~/hl/data/visor_child_stderr/{date}/{node_binary_index}
+```
+
+---
